@@ -12,7 +12,7 @@ import logging
 import traceback
 from pathlib import Path
 
-import torch
+import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastai.vision.all import load_learner
@@ -117,7 +117,9 @@ def predict(img_path: str) -> dict:
     """
     try:
         pred, _, probs = learn.predict(img_path)
-        top3_probs, top3_idxs = torch.topk(probs, 3)
+        probs_np = probs.numpy()
+        top3_idxs = probs_np.argsort()[-3:]
+        top3_probs = probs_np[top3_idxs]
         top3_labels = [learn.dls.vocab[i] for i in top3_idxs]
         probs = [round(float(p), 2) * 100 for p in top3_probs]
         
