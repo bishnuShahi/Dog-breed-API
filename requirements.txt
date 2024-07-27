@@ -2,3 +2,4 @@ fastapi
 uvicorn
 fastai
 pillow
+numpy
