@@ -6,34 +6,28 @@ It accepts image uploads, validates them, and returns classification predictions
 """
 
 import os
-import sys
 import tempfile
 import logging
 import traceback
 from pathlib import Path
 
-import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastai.vision.all import load_learner
 from PIL import Image
 
-if sys.platform == "win32":
-    import pathlib
-    temp = pathlib.PosixPath
-    pathlib.PosixPath = pathlib.WindowsPath
-
 
 # Configuration
-MODEL_PATH = Path("model.pkl")
+BASE_DIR = Path(__file__).resolve(strict=True).parent
+MODEL_PATH = f"{BASE_DIR}/model.pkl"
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 # Logging setup
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 # FastAPI app initialization
-app = FastAPI(title="Image Classification API",
-              description="API for classifying images using a pre-trained FastAI model",
+app = FastAPI(title="Dog Breed Image Classification API",
+              description="API for classifying dog breeds using a FastAI model",
               version="1.0.0")
 
 # CORS middleware setup
@@ -45,7 +39,21 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-def load_model(model_path: Path):
+@app.get("/", summary="Check API status", response_description="API status message")
+async def root():
+    """
+    Root endpoint to check if the API is running.
+
+    Returns:
+        dict: A dictionary containing the API title and description.
+    """
+    return {
+        "message": "API is running",
+        "title": app.title,
+        "description": app.description
+    }
+
+def load_model(model_path):
     """
     Load the pre-trained FastAI model.
 
