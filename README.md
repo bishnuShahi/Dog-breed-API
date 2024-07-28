@@ -47,9 +47,7 @@ http://localhost:8000
 GET http://localhost:8000/
 ```
 
-4. To classify a dog breed from an image, send a POST request to the 
-/predict
- endpoint with the image file:
+4. To classify a dog breed from an image, send a POST request to the ```/predict``` endpoint with the image file:
 
 ```
 POST http://localhost:8000/predict
