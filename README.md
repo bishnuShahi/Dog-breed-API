@@ -33,12 +33,12 @@ pip install -r requirements.txt
 1. Start the FastAPI server:
 
 ```bash
-uvicorn app.api.main:app --reload
+uvicorn app.api.main:app --reload  # If django project is running, use `unvicorn app.api.main:app --reload --port --8001`  or any port of your choice
 ```
 
 2. The API will be available at 
 ```
-http://localhost:8000
+http://localhost:8000 # Or the port you set
 ```
 
 3. To check if the API is running, send a GET request to the root endpoint:
@@ -64,9 +64,9 @@ The API will return a JSON response with the top 3 predicted dog breeds and thei
 ```json
 {
     "prediction": {
-        "breed1": 95.23,
-        "breed2": 3.12,
-        "breed3": 1.65
+        "breed1": 95,
+        "breed2": 3,
+        "breed3": 2
     }
 }
 ```
