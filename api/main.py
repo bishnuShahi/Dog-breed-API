@@ -9,6 +9,7 @@ import os
 import tempfile
 import logging
 import traceback
+import pathlib
 from pathlib import Path
 
 from fastapi import FastAPI, File, UploadFile, HTTPException
@@ -16,10 +17,11 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastai.vision.all import load_learner
 from PIL import Image
 
+temp = pathlib.PosixPath
+pathlib.PosixPath = pathlib.WindowsPath
 
 # Configuration
-BASE_DIR = Path(__file__).resolve(strict=True).parent
-MODEL_PATH = f"{BASE_DIR}/model.pkl"
+MODEL_PATH = Path("api/model.pkl")
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
 
 # Logging setup
@@ -78,12 +80,13 @@ def load_model(model_path):
 # Load the model
 learn = load_model(MODEL_PATH)
 
-async def validate_image(file: UploadFile) -> str:
+async def validate_image_data(image_data: bytes, filename: str) -> str:
     """
-    Validate and save the uploaded image file.
+    Validate and save the image data to a temporary file.
 
     Args:
-        file (UploadFile): The uploaded file.
+        image_data (bytes): The image data.
+        filename (str): The filename of the uploaded image.
 
     Returns:
         str: Path to the temporarily saved image file.
@@ -91,17 +94,21 @@ async def validate_image(file: UploadFile) -> str:
     Raises:
         HTTPException: If the file is invalid or processing fails.
     """
-    if file.filename.split('.')[-1].lower() not in ALLOWED_EXTENSIONS:
+    extension = filename.split('.')[-1].lower()
+    if extension not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail="Invalid image format. Allowed formats are: png, jpg, jpeg")
 
     try:
-        with tempfile.NamedTemporaryFile(delete=False, suffix='.jpg') as temp_file:
-            contents = await file.read()
-            temp_file.write(contents)
+        with tempfile.NamedTemporaryFile(delete=False, suffix=f'.{extension}') as temp_file:
+            temp_file.write(image_data)
             temp_file_path = temp_file.name
 
         with Image.open(temp_file_path) as img:
-            img.verify()
+            try:
+                img.verify()
+            except Exception as e:
+                logging.error(f'Error verifying image: {e}')
+                raise HTTPException(status_code=400, detail=f"Invalid image file: {str(e)}")
 
         return temp_file_path
 
@@ -129,47 +136,52 @@ def predict(img_path: str) -> dict:
         top3_idxs = probs_np.argsort()[-3:]
         top3_probs = probs_np[top3_idxs]
         top3_labels = [learn.dls.vocab[i] for i in top3_idxs]
-        probs = [round(float(p), 2) * 100 for p in top3_probs]
+        probs = [round(float(p) * 100) for p in top3_probs]
         
         return {label: prob for label, prob in zip(top3_labels, probs)}
     
     except Exception as e:
         logging.error(f'Error making prediction: {e}')
         logging.error(traceback.format_exc())
-        raise ValueError(f"Error making prediction: {str(e)}") from e
+        raise HTTPException(status_code=500, detail=f"Error making prediction: {str(e)}")
 
-@app.post("/predict", summary="Predict image classification", 
-          response_description="Image classification predictions")
+@app.post("/predict/", summary="Classify an image", response_description="Image classification results")
 async def predict_image(file: UploadFile = File(...)):
     """
-    Endpoint to predict the classification of an uploaded image.
+    Endpoint for classifying an image.
 
     Args:
-        file (UploadFile): The image file to be classified.
+        file (UploadFile): The uploaded image file.
 
     Returns:
-        dict: Prediction results.
+        dict: Dictionary containing top 3 predictions and their probabilities.
 
     Raises:
-        HTTPException: For various error conditions.
+        HTTPException: If the file is invalid or processing fails.
     """
-    temp_file_path = None
     try:
-        temp_file_path = await validate_image(file)
-        prediction = predict(temp_file_path)
-        return {"prediction": prediction}
-    except HTTPException as e:
-        raise e
-    except ValueError as e:
-        raise HTTPException(status_code=500, detail=str(e))
-    except Exception as e:
-        logging.error(f'Unexpected error: {str(e)}')
-        logging.error(traceback.format_exc())
-        raise HTTPException(status_code=500, detail="An unexpected error occurred")
-    finally:
-        if temp_file_path and os.path.exists(temp_file_path):
-            os.remove(temp_file_path)
+        # Get the image data from the file object
+        image_data = await file.read()
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+        # Validate and save the image data
+        img_path = await validate_image_data(image_data, file.filename)
+
+        # Make predictions on the image
+        predictions = predict(img_path)
+
+        # Remove the temporary image file
+        os.remove(img_path)
+
+        return predictions
+
+    except HTTPException as e:
+        logging.error(f'Error processing image: {e}')
+        logging.error(traceback.format_exc())
+        raise e
+
+    except Exception as e:
+        logging.error(f'Error processing image: {e}')
+        logging.error(traceback.format_exc())
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
