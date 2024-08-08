@@ -33,7 +33,7 @@ pip install -r requirements.txt
 1. Start the FastAPI server:
 
 ```bash
-uvicorn app.api.main:app --reload  # If django project is running, use `unvicorn app.api.main:app --reload --port --8001`  or any port of your choice
+uvicorn api.main:app --reload  # If django project is running, use `uvicorn api.main:app --reload --port 8001`  or any port of your choice
 ```
 
 2. The API will be available at 
